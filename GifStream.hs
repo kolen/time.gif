@@ -14,6 +14,8 @@ module GifStream (
 
 import System.IO
 
+import Text.Printf (printf)
+
 import Network hiding (accept)
 import Network.Socket
 import Network.Socket.ByteString (sendAll)
@@ -24,7 +26,7 @@ import Control.Concurrent
 import Data.IORef
 
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8() -- for OverloadedStrings
+import qualified Data.ByteString.Char8 as C
 
 type RGB = (Int,Int,Int) -- ^ Values in [0..3]
 type Frame = [[RGB]]
@@ -65,7 +67,7 @@ loop delay frameSignal sock = do
 
     nextFrame c = do
       f <- receiveMSignal frameSignal
-      sendAll c $ frame (delay `div` 10000) f
+      sendAll c $ httpChunk $ frame (delay `div` 10000) f
       nextFrame c
 
     msg content = B.intercalate "\r\n"
@@ -76,9 +78,17 @@ loop delay frameSignal sock = do
       , "Cache-Control: no-cache"
       , "Cache-Control: no-store"
       , "Cache-Control: no-transform"
+      , "Transfer-Encoding: chunked"
       , ""
-      , content
+      , httpChunk content
       ]
+
+
+httpChunk :: B.ByteString -> B.ByteString
+httpChunk blk = B.concat [ hexlen, "\r\n", blk, "\r\n" ]
+  where
+    len = B.length blk
+    hexlen = C.pack $ printf "%X" len
 
 -- | Get a function that waits for the specified time whenever it's called
 getMetronome :: Int -> IO (IO ())
